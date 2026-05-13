@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>World Population Census Map</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; background: #f5f4f0; color: #1a1a18; min-height: 100vh; padding: 1.5rem; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #1a1a18; color: #f0ede6; }
+    .metric { background: #2c2c2a !important; }
+    .card { background: #242422 !important; border-color: rgba(255,255,255,.1) !important; }
+    .det-stat { background: #2c2c2a !important; border-color: rgba(255,255,255,.08) !important; }
+    button { border-color: rgba(255,255,255,.2) !important; color: #f0ede6 !important; }
+    button.active { background: rgba(255,255,255,.08) !important; }
+    #tooltip { background: #242422 !important; border-color: rgba(255,255,255,.15) !important; color: #f0ede6 !important; }
+  }
+  h1 { font-size: 22px; font-weight: 500; margin-bottom: .25rem; }
+  .subtitle { font-size: 13px; color: #888780; margin-bottom: 1.25rem; }
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 1rem; }
+  .metric { background: #eae8e2; border-radius: 8px; padding: .75rem 1rem; text-align: center; }
+  .metric-val { font-size: 22px; font-weight: 500; }
+  .metric-lbl { font-size: 12px; color: #888780; }
+  .controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: .75rem; }
+  .controls span { font-size: 13px; color: #888780; }
+  button { cursor: pointer; border-radius: 8px; border: 0.5px solid #b4b2a9; background: transparent; color: #1a1a18; padding: 5px 12px; font-size: 13px; font-family: inherit; }
+  button:hover { background: #eae8e2; }
+  button.active { background: #eae8e2; font-weight: 500; }
+  .map-wrap { position: relative; }
+  svg { display: block; width: 100%; border-radius: 10px; background: #ddeeff; }
+  @media (prefers-color-scheme: dark) { svg { background: #1c2535; } }
+  path.country { cursor: pointer; transition: opacity .15s; }
+  path.country:hover { opacity: .75; stroke-width: 1.5px !important; }
+  path.country.selected { stroke: #e24b4a !important; stroke-width: 2px !important; }
+  #tooltip { position: absolute; background: #fff; border: 0.5px solid #b4b2a9; border-radius: 8px; padding: 8px 12px; font-size: 13px; pointer-events: none; display: none; z-index: 99; min-width: 160px; }
+  .legend-row { display: flex; align-items: center; gap: 10px; margin-top: .5rem; }
+  .legend-row span { font-size: 11px; color: #888780; }
+  #legend-bar { flex: 1; height: 10px; border-radius: 4px; }
+  #country-detail { display: none; margin-top: 1rem; background: #eae8e2; border-radius: 12px; padding: 1rem 1.25rem; }
+  @media (prefers-color-scheme: dark) { #country-detail { background: #242422; } }
+  .det-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: .75rem; }
+  .det-head h2 { font-size: 16px; font-weight: 500; }
+  #det-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+  .det-stat { background: #fff; border-radius: 8px; padding: .6rem .9rem; border: 0.5px solid #d3d1c7; }
+  .det-stat p:first-child { font-size: 11px; color: #888780; margin-bottom: 2px; }
+  .det-stat p:last-child { font-size: 16px; font-weight: 500; }
+  .det-foot { margin-top: .75rem; }
+  footer { margin-top: 1.5rem; font-size: 12px; color: #888780; text-align: center; }
+</style>
+</head>
+<body>
+<h1>World Population Census Map</h1>
+<p class="subtitle">2024 estimates · click a country to explore · hover for quick stats</p>
+
+<div class="metrics">
+  <div class="metric"><div class="metric-val" id="m-world">8.1B</div><div class="metric-lbl">World population</div></div>
+  <div class="metric"><div class="metric-val" id="m-sel">—</div><div class="metric-lbl">Selected country</div></div>
+  <div class="metric"><div class="metric-val" id="m-pct">—</div><div class="metric-lbl">% of world</div></div>
+  <div class="metric"><div class="metric-val" id="m-den">—</div><div class="metric-lbl">Density (per km²)</div></div>
+</div>
+
+<div class="controls">
+  <span>Color by:</span>
+  <button class="active" id="btn-pop" onclick="setMode('pop')">Population</button>
+  <button id="btn-den" onclick="setMode('den')">Density</button>
+  <button id="btn-gr" onclick="setMode('gr')">Growth rate</button>
+</div>
+
+<div class="map-wrap">
+  <svg id="wmap-svg" viewBox="0 0 960 480" role="img" aria-label="Interactive choropleth world map showing population census data by country"></svg>
+  <div id="tooltip"></div>
+</div>
+
+<div class="legend-row">
+  <span id="leg-lo"></span>
+  <div id="legend-bar"></div>
+  <span id="leg-hi"></span>
+</div>
+
+<div id="country-detail">
+  <div class="det-head">
+    <h2 id="det-name"></h2>
+    <button onclick="clearSelection()">✕ close</button>
+  </div>
+  <div id="det-stats"></div>
+  <div class="det-foot">
+    <button onclick="window.open('https://www.google.com/search?q='+encodeURIComponent(document.getElementById(\'det-name\').textContent+\' population demographics\'))">Search demographics ↗</button>
+  </div>
+</div>
+
+<footer>Data: 2024 estimates. Sources: UN World Population Prospects, World Bank.</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+<script>
+const DATA = {
+  4:  {n:"Afghanistan",       pop:43884000,  area:652230,   gr:2.3},
+  8:  {n:"Albania",           pop:2745000,   area:28748,    gr:0.1},
+  12: {n:"Algeria",           pop:47022000,  area:2381741,  gr:1.5},
+  24: {n:"Angola",            pop:37885000,  area:1246700,  gr:3.3},
+  32: {n:"Argentina",         pop:46654000,  area:2780400,  gr:0.9},
+  36: {n:"Australia",         pop:26768000,  area:7692024,  gr:1.6},
+  40: {n:"Austria",           pop:9120000,   area:83871,    gr:0.4},
+  50: {n:"Bangladesh",        pop:173562000, area:147570,   gr:1.0},
+  56: {n:"Belgium",           pop:11697000,  area:30528,    gr:0.4},
+  68: {n:"Bolivia",           pop:12389000,  area:1098581,  gr:1.5},
+  76: {n:"Brazil",            pop:216423000, area:8515767,  gr:0.6},
+  100:{n:"Bulgaria",          pop:6445000,   area:110879,   gr:-0.7},
+  116:{n:"Cambodia",          pop:17424000,  area:181035,   gr:1.2},
+  120:{n:"Cameroon",          pop:29122000,  area:475442,   gr:2.7},
+  124:{n:"Canada",            pop:38782000,  area:9984670,  gr:1.0},
+  144:{n:"Sri Lanka",         pop:22157000,  area:65610,    gr:0.3},
+  152:{n:"Chile",             pop:19629000,  area:756102,   gr:0.8},
+  156:{n:"China",             pop:1409670000,area:9596960,  gr:0.0},
+  170:{n:"Colombia",          pop:52886000,  area:1141748,  gr:0.9},
+  180:{n:"DR Congo",          pop:102262000, area:2344858,  gr:3.2},
+  188:{n:"Costa Rica",        pop:5213000,   area:51100,    gr:0.8},
+  191:{n:"Croatia",           pop:3862000,   area:56594,    gr:-0.4},
+  204:{n:"Benin",             pop:13712000,  area:112622,   gr:2.7},
+  218:{n:"Ecuador",           pop:18001000,  area:283561,   gr:1.5},
+  818:{n:"Egypt",             pop:107770000, area:1001449,  gr:1.8},
+  231:{n:"Ethiopia",          pop:126527000, area:1104300,  gr:2.5},
+  246:{n:"Finland",           pop:5594000,   area:338424,   gr:0.2},
+  250:{n:"France",            pop:68170000,  area:551695,   gr:0.3},
+  276:{n:"Germany",           pop:84480000,  area:357114,   gr:0.2},
+  288:{n:"Ghana",             pop:34122000,  area:238533,   gr:2.2},
+  300:{n:"Greece",            pop:10413000,  area:131957,   gr:-0.2},
+  320:{n:"Guatemala",         pop:18584000,  area:108889,   gr:2.0},
+  324:{n:"Guinea",            pop:14191000,  area:245857,   gr:2.8},
+  340:{n:"Honduras",          pop:10593000,  area:112492,   gr:1.6},
+  348:{n:"Hungary",           pop:9710000,   area:93028,    gr:-0.3},
+  356:{n:"India",             pop:1428628000,area:3287263,  gr:0.9},
+  360:{n:"Indonesia",         pop:278696000, area:1904569,  gr:0.8},
+  364:{n:"Iran",              pop:87923000,  area:1648195,  gr:1.3},
+  368:{n:"Iraq",              pop:43534000,  area:438317,   gr:2.3},
+  372:{n:"Ireland",           pop:5056000,   area:70273,    gr:1.2},
+  376:{n:"Israel",            pop:9664000,   area:22145,    gr:1.7},
+  380:{n:"Italy",             pop:58870000,  area:301340,   gr:-0.2},
+  392:{n:"Japan",             pop:123295000, area:377930,   gr:-0.5},
+  400:{n:"Jordan",            pop:10269000,  area:89342,    gr:1.5},
+  404:{n:"Kenya",             pop:55101000,  area:580367,   gr:2.3},
+  408:{n:"North Korea",       pop:26069000,  area:120538,   gr:0.5},
+  410:{n:"South Korea",       pop:51713000,  area:100210,   gr:0.1},
+  418:{n:"Laos",              pop:7653000,   area:236800,   gr:1.5},
+  422:{n:"Lebanon",           pop:5353000,   area:10452,    gr:0.7},
+  434:{n:"Libya",             pop:7361000,   area:1759540,  gr:1.7},
+  450:{n:"Madagascar",        pop:29612000,  area:587041,   gr:2.7},
+  484:{n:"Mexico",            pop:128455000, area:1964375,  gr:0.9},
+  504:{n:"Morocco",           pop:37840000,  area:446550,   gr:1.1},
+  508:{n:"Mozambique",        pop:33897000,  area:801590,   gr:2.9},
+  516:{n:"Namibia",           pop:2588000,   area:824292,   gr:1.9},
+  524:{n:"Nepal",             pop:30035000,  area:147181,   gr:1.0},
+  528:{n:"Netherlands",       pop:17890000,  area:41543,    gr:0.6},
+  554:{n:"New Zealand",       pop:5185000,   area:270467,   gr:0.9},
+  558:{n:"Nicaragua",         pop:6948000,   area:130370,   gr:1.0},
+  562:{n:"Niger",             pop:25252000,  area:1267000,  gr:3.8},
+  566:{n:"Nigeria",           pop:223804000, area:923768,   gr:2.5},
+  578:{n:"Norway",            pop:5474000,   area:385207,   gr:0.6},
+  586:{n:"Pakistan",          pop:231402000, area:881913,   gr:1.9},
+  591:{n:"Panama",            pop:4352000,   area:75417,    gr:1.6},
+  600:{n:"Paraguay",          pop:7436000,   area:406752,   gr:1.4},
+  604:{n:"Peru",              pop:33715000,  area:1285216,  gr:1.0},
+  608:{n:"Philippines",       pop:117337000, area:300000,   gr:1.5},
+  616:{n:"Poland",            pop:41026000,  area:312696,   gr:-0.1},
+  620:{n:"Portugal",          pop:10247000,  area:92212,    gr:0.1},
+  642:{n:"Romania",           pop:19035000,  area:238397,   gr:-0.5},
+  643:{n:"Russia",            pop:144444000, area:17098246, gr:-0.2},
+  646:{n:"Rwanda",            pop:14094000,  area:26338,    gr:2.5},
+  682:{n:"Saudi Arabia",      pop:36947000,  area:2149690,  gr:1.7},
+  686:{n:"Senegal",           pop:17964000,  area:196722,   gr:2.7},
+  710:{n:"South Africa",      pop:60414000,  area:1221037,  gr:1.3},
+  724:{n:"Spain",             pop:47519000,  area:505990,   gr:0.1},
+  729:{n:"Sudan",             pop:46874000,  area:1861484,  gr:2.5},
+  752:{n:"Sweden",            pop:10612000,  area:450295,   gr:0.7},
+  756:{n:"Switzerland",       pop:8796000,   area:41285,    gr:0.9},
+  760:{n:"Syria",             pop:21324000,  area:185180,   gr:2.1},
+  764:{n:"Thailand",          pop:71801000,  area:513120,   gr:0.2},
+  788:{n:"Tunisia",           pop:12059000,  area:163610,   gr:0.9},
+  792:{n:"Turkey",            pop:85326000,  area:783562,   gr:0.9},
+  800:{n:"Uganda",            pop:49789000,  area:241551,   gr:3.3},
+  804:{n:"Ukraine",           pop:43531000,  area:603550,   gr:-0.6},
+  784:{n:"UAE",               pop:9770000,   area:83600,    gr:1.5},
+  826:{n:"United Kingdom",    pop:67888000,  area:242495,   gr:0.5},
+  840:{n:"United States",     pop:339996000, area:9372610,  gr:0.5},
+  858:{n:"Uruguay",           pop:3423000,   area:176215,   gr:0.4},
+  860:{n:"Uzbekistan",        pop:36436000,  area:448978,   gr:1.5},
+  862:{n:"Venezuela",         pop:28302000,  area:912050,   gr:1.2},
+  704:{n:"Vietnam",           pop:97468000,  area:331212,   gr:0.9},
+  887:{n:"Yemen",             pop:34449000,  area:527968,   gr:2.7},
+  894:{n:"Zambia",            pop:20570000,  area:752618,   gr:2.9},
+  716:{n:"Zimbabwe",          pop:16665000,  area:390757,   gr:1.6},
+};
+
+let mode = 'pop';
+let selId = null;
+const WORLD_POP = 8117000000;
+const fmt = n => n >= 1e9 ? (n/1e9).toFixed(2)+'B' : n >= 1e6 ? (n/1e6).toFixed(1)+'M' : n >= 1e3 ? (n/1e3).toFixed(0)+'K' : n;
+
+function setMode(m) {
+  mode = m;
+  document.querySelectorAll('button[id^=btn]').forEach(b => b.classList.remove('active'));
+  document.getElementById('btn-'+m).classList.add('active');
+  updateColors();
+}
+
+function getVal(d) {
+  if (!d) return null;
+  if (mode === 'pop') return d.pop;
+  if (mode === 'den') return d.pop / d.area;
+  if (mode === 'gr') return d.gr;
+}
+
+function colorScale() {
+  if (mode === 'pop') return d3.scaleSequentialLog([100000, 1500000000], d3.interpolateBlues).clamp(true);
+  if (mode === 'den') return d3.scaleSequentialLog([0.1, 1500], d3.interpolateYlOrRd).clamp(true);
+  if (mode === 'gr') return d3.scaleDiverging([-1, 0, 4], d3.interpolateRdYlGn).clamp(true);
+}
+
+function updateColors() {
+  const scale = colorScale();
+  const isDark = matchMedia('(prefers-color-scheme: dark)').matches;
+  const noData = isDark ? '#2c2c2a' : '#d3d1c7';
+  d3.selectAll('path.country').attr('fill', function(d) {
+    const row = DATA[+d.id];
+    const v = getVal(row);
+    return v != null ? scale(v) : noData;
+  });
+  const labels = {pop:{lo:'Smaller',hi:'Larger'},den:{lo:'Low density',hi:'High density'},gr:{lo:'Declining',hi:'High growth'}};
+  document.getElementById('leg-lo').textContent = labels[mode].lo;
+  document.getElementById('leg-hi').textContent = labels[mode].hi;
+  const colors = d3.range(0,101).map(t => scale(scale.domain()[0]+(scale.domain()[scale.domain().length-1]-scale.domain()[0])*t/100));
+  document.getElementById('legend-bar').style.background = `linear-gradient(to right,${colors.join(',')})`;
+}
+
+function clearSelection() {
+  selId = null;
+  d3.selectAll('path.country').classed('selected', false);
+  document.getElementById('country-detail').style.display = 'none';
+  ['m-sel','m-pct','m-den'].forEach(id => document.getElementById(id).textContent = '—');
+}
+
+function showCountry(id) {
+  const row = DATA[+id];
+  selId = id;
+  d3.selectAll('path.country').classed('selected', false);
+  d3.select('#c-'+id).classed('selected', true);
+  if (!row) { document.getElementById('country-detail').style.display = 'none'; return; }
+  const den = (row.pop/row.area).toFixed(1);
+  const pct = ((row.pop/WORLD_POP)*100).toFixed(2);
+  document.getElementById('m-sel').textContent = fmt(row.pop);
+  document.getElementById('m-pct').textContent = pct+'%';
+  document.getElementById('m-den').textContent = den;
+  document.getElementById('det-name').textContent = row.n;
+  const stats = [
+    {label:'Population', val:fmt(row.pop)},
+    {label:'Area (km²)', val:(+row.area).toLocaleString()},
+    {label:'Density', val:den+' /km²'},
+    {label:'Growth rate', val:row.gr+' %/yr'},
+    {label:'% of world', val:pct+'%'},
+  ];
+  document.getElementById('det-stats').innerHTML = stats.map(s =>
+    `<div class="det-stat"><p>${s.label}</p><p>${s.val}</p></div>`
+  ).join('');
+  document.getElementById('country-detail').style.display = 'block';
+}
+
+const svg = d3.select('#wmap-svg');
+const proj = d3.geoNaturalEarth1().scale(153).translate([480,240]);
+const path = d3.geoPath(proj);
+const tip = document.getElementById('tooltip');
+
+d3.json('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json').then(world => {
+  const features = topojson.feature(world, world.objects.countries).features;
+  svg.selectAll('path.country').data(features).join('path')
+    .attr('class','country')
+    .attr('id', d => 'c-'+d.id)
+    .attr('d', path)
+    .attr('stroke', () => matchMedia('(prefers-color-scheme:dark)').matches ? 'rgba(255,255,255,.18)' : 'rgba(0,0,0,.18)')
+    .attr('stroke-width', .4)
+    .on('mousemove', function(event, d) {
+      const row = DATA[+d.id];
+      const name = row ? row.n : 'Country #'+d.id;
+      const v = getVal(row);
+      const valStr = v != null ? (mode==='pop'?fmt(v):mode==='den'?v.toFixed(1)+' /km²':v+' %/yr') : 'No data';
+      tip.style.display = 'block';
+      tip.style.left = (event.offsetX+12)+'px';
+      tip.style.top = (event.offsetY-10)+'px';
+      tip.innerHTML = `<strong style="font-size:14px;">${name}</strong><br><span style="color:#888780;font-size:12px;">${mode==='pop'?'Population':mode==='den'?'Density':'Growth'}: ${valStr}</span>`;
+    })
+    .on('mouseleave', () => { tip.style.display = 'none'; })
+    .on('click', (event, d) => showCountry(d.id));
+  updateColors();
+});
+</script>
+</body>
+</html>
