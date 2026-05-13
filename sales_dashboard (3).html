@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Sales Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0d0f14;
+    --surface: #151820;
+    --surface2: #1c2030;
+    --border: rgba(255,255,255,0.07);
+    --text: #e8eaf0;
+    --muted: #6b7280;
+    --accent: #3b82f6;
+    --accent2: #10b981;
+    --accent3: #f59e0b;
+    --accent4: #ef4444;
+    --accent5: #8b5cf6;
+    --font-display: 'DM Serif Display', serif;
+    --font-body: 'DM Sans', sans-serif;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    min-height: 100vh;
+    padding: 2rem;
+  }
+
+  /* ── Header ── */
+  .header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 2.5rem;
+    animation: fadeUp 0.5s ease both;
+  }
+  .header h1 {
+    font-family: var(--font-display);
+    font-size: 2rem;
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    color: var(--text);
+  }
+  .header p {
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .badge {
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(59,130,246,0.15);
+    color: #93c5fd;
+    border: 1px solid rgba(59,130,246,0.25);
+    font-weight: 500;
+  }
+
+  /* ── KPI row ── */
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 1.5rem;
+    animation: fadeUp 0.6s ease 0.1s both;
+  }
+  .kpi {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.1rem 1.25rem;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .kpi:hover { border-color: rgba(255,255,255,0.15); }
+  .kpi::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    border-radius: 14px 14px 0 0;
+  }
+  .kpi:nth-child(1)::before { background: var(--accent); }
+  .kpi:nth-child(2)::before { background: var(--accent2); }
+  .kpi:nth-child(3)::before { background: var(--accent3); }
+  .kpi:nth-child(4)::before { background: var(--accent5); }
+  .kpi-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; font-weight: 500; }
+  .kpi-value { font-size: 26px; font-weight: 600; line-height: 1; margin-bottom: 6px; }
+  .kpi-delta { font-size: 12px; }
+  .up { color: #34d399; }
+  .down { color: #f87171; }
+
+  /* ── Grid ── */
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .full { grid-column: 1 / -1; }
+
+  /* ── Chart cards ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.25rem 1.5rem;
+    animation: fadeUp 0.7s ease 0.2s both;
+    transition: border-color 0.2s;
+  }
+  .card:hover { border-color: rgba(255,255,255,0.12); }
+  .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+  .card-title { font-size: 13px; font-weight: 500; color: var(--text); }
+  .card-sub { font-size: 11px; color: var(--muted); }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 12px; }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); }
+  .legend-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+
+  canvas-wrap { position: relative; width: 100%; }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(14px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @media (max-width: 768px) {
+    .kpi-row { grid-template-columns: 1fr 1fr; }
+    .grid { grid-template-columns: 1fr; }
+    .full { grid-column: auto; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>Sales Dashboard</h1>
+    <p style="margin-top:4px;">Fiscal Year 2024 — Full Overview</p>
+  </div>
+  <span class="badge">Live Data</span>
+</div>
+
+<!-- KPI Cards -->
+<div class="kpi-row">
+  <div class="kpi">
+    <p class="kpi-label">Total Revenue</p>
+    <p class="kpi-value" style="color:#60a5fa;">$4.82M</p>
+    <p class="kpi-delta up">↑ 12.4% vs last year</p>
+  </div>
+  <div class="kpi">
+    <p class="kpi-label">Total Orders</p>
+    <p class="kpi-value" style="color:#34d399;">18,340</p>
+    <p class="kpi-delta up">↑ 8.1% vs last year</p>
+  </div>
+  <div class="kpi">
+    <p class="kpi-label">Avg. Order Value</p>
+    <p class="kpi-value" style="color:#fbbf24;">$263</p>
+    <p class="kpi-delta up">↑ 3.9% vs last year</p>
+  </div>
+  <div class="kpi">
+    <p class="kpi-label">Conversion Rate</p>
+    <p class="kpi-value" style="color:#a78bfa;">3.7%</p>
+    <p class="kpi-delta down">↓ 0.3pp vs last year</p>
+  </div>
+</div>
+
+<!-- Charts Grid -->
+<div class="grid">
+
+  <!-- Chart 1: Monthly Revenue Line -->
+  <div class="card full">
+    <div class="card-header">
+      <span class="card-title">Monthly Revenue Trend</span>
+      <span class="card-sub">2024 vs 2023</span>
+    </div>
+    <div class="legend">
+      <div class="legend-item"><span class="legend-dot" style="background:#3b82f6;"></span>2024</div>
+      <div class="legend-item"><span class="legend-dot" style="background:#4b5563; border:1px dashed #6b7280;"></span>2023</div>
+    </div>
+    <div style="position:relative;width:100%;height:230px;">
+      <canvas id="c1" role="img" aria-label="Line chart showing monthly revenue comparison between 2024 and 2023">Monthly revenue 2024 and 2023.</canvas>
+    </div>
+  </div>
+
+  <!-- Chart 2: Doughnut - Category -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Revenue by Category</span>
+      <span class="card-sub">2024 share</span>
+    </div>
+    <div class="legend">
+      <div class="legend-item"><span class="legend-dot" style="background:#3b82f6;"></span>Electronics 38%</div>
+      <div class="legend-item"><span class="legend-dot" style="background:#10b981;"></span>Apparel 24%</div>
+      <div class="legend-item"><span class="legend-dot" style="background:#f59e0b;"></span>Home 18%</div>
+      <div class="legend-item"><span class="legend-dot" style="background:#ef4444;"></span>Beauty 12%</div>
+      <div class="legend-item"><span class="legend-dot" style="background:#6b7280;"></span>Other 8%</div>
+    </div>
+    <div style="position:relative;width:100%;height:210px;">
+      <canvas id="c2" role="img" aria-label="Doughnut chart of revenue by product category">Category revenue share.</canvas>
+    </div>
+  </div>
+
+  <!-- Chart 3: Grouped Bar - Regional -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Regional Performance</span>
+      <span class="card-sub">Q3 vs Q4 ($K)</span>
+    </div>
+    <div class="legend">
+      <div class="legend-item"><span class="legend-dot" style="background:#3b82f6;"></span>Q3</div>
+      <div class="legend-item"><span class="legend-dot" style="background:#10b981;"></span>Q4</div>
+    </div>
+    <div style="position:relative;width:100%;height:210px;">
+      <canvas id="c3" role="img" aria-label="Grouped bar chart of Q3 and Q4 sales by region">Regional Q3 vs Q4 sales.</canvas>
+    </div>
+  </div>
+
+  <!-- Chart 4: Horizontal Bar - Funnel -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Sales Funnel</span>
+      <span class="card-sub">Conversion stages</span>
+    </div>
+    <div style="position:relative;width:100%;height:240px;">
+      <canvas id="c4" role="img" aria-label="Horizontal bar chart of sales funnel stages from visitors to closed deals">Sales funnel: Visitors to Closed.</canvas>
+    </div>
+  </div>
+
+  <!-- Chart 5: Area - Daily Orders -->
+  <div class="card full">
+    <div class="card-header">
+      <span class="card-title">Daily Orders — Last 30 Days</span>
+      <span class="card-sub">November 2024</span>
+    </div>
+    <div class="legend">
+      <div class="legend-item"><span class="legend-dot" style="background:#8b5cf6;"></span>Orders</div>
+    </div>
+    <div style="position:relative;width:100%;height:190px;">
+      <canvas id="c5" role="img" aria-label="Area chart of daily order volume over the past 30 days">Daily orders trend over 30 days.</canvas>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ── Shared defaults ── */
+Chart.defaults.color = '#6b7280';
+Chart.defaults.font.family = "'DM Sans', sans-serif";
+Chart.defaults.font.size = 11;
+
+const gridColor = 'rgba(255,255,255,0.05)';
+const tickColor = '#6b7280';
+
+/* ── Chart 1: Monthly Revenue Line ── */
+const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+new Chart(document.getElementById('c1'), {
+  type: 'line',
+  data: {
+    labels: months,
+    datasets: [
+      {
+        label: '2024',
+        data: [310,295,340,380,420,395,440,460,415,490,520,480],
+        borderColor: '#3b82f6',
+        backgroundColor: 'rgba(59,130,246,0.1)',
+        fill: true, tension: 0.4, pointRadius: 4,
+        pointBackgroundColor: '#3b82f6', borderWidth: 2
+      },
+      {
+        label: '2023',
+        data: [270,260,300,330,370,350,390,410,380,440,470,430],
+        borderColor: '#4b5563',
+        backgroundColor: 'transparent',
+        fill: false, tension: 0.4, pointRadius: 2,
+        pointBackgroundColor: '#4b5563', borderDash: [5,4], borderWidth: 1.5
+      }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => '$' + ctx.parsed.y + 'K' } } },
+    scales: {
+      x: { grid: { color: gridColor }, ticks: { color: tickColor } },
+      y: { grid: { color: gridColor }, ticks: { color: tickColor, callback: v => '$' + v + 'K' } }
+    }
+  }
+});
+
+/* ── Chart 2: Doughnut ── */
+new Chart(document.getElementById('c2'), {
+  type: 'doughnut',
+  data: {
+    labels: ['Electronics','Apparel','Home','Beauty','Other'],
+    datasets: [{
+      data: [38,24,18,12,8],
+      backgroundColor: ['#3b82f6','#10b981','#f59e0b','#ef4444','#6b7280'],
+      borderWidth: 2,
+      borderColor: '#151820',
+      hoverOffset: 8
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false, cutout: '65%',
+    plugins: {
+      legend: { display: false },
+      tooltip: { callbacks: { label: ctx => ctx.label + ': ' + ctx.parsed + '%' } }
+    }
+  }
+});
+
+/* ── Chart 3: Grouped Bar Regional ── */
+new Chart(document.getElementById('c3'), {
+  type: 'bar',
+  data: {
+    labels: ['N. America','Europe','Asia-Pac','LATAM','MEA'],
+    datasets: [
+      { label:'Q3', data:[890,620,540,310,210], backgroundColor:'#3b82f6', borderRadius:5, borderSkipped:false },
+      { label:'Q4', data:[980,710,630,360,250], backgroundColor:'#10b981', borderRadius:5, borderSkipped:false }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { display: false }, ticks: { color: tickColor } },
+      y: { grid: { color: gridColor }, ticks: { color: tickColor, callback: v => '$' + v + 'K' } }
+    }
+  }
+});
+
+/* ── Chart 4: Horizontal Bar Funnel ── */
+const funnelColors = ['rgba(59,130,246,0.3)','rgba(59,130,246,0.5)','rgba(59,130,246,0.65)','rgba(59,130,246,0.8)','#3b82f6'];
+new Chart(document.getElementById('c4'), {
+  type: 'bar',
+  data: {
+    labels: ['Visitors','Leads','Prospects','Qualified','Closed'],
+    datasets: [{
+      data: [50000,18400,7200,2600,680],
+      backgroundColor: funnelColors,
+      borderRadius: 5, borderSkipped: false
+    }]
+  },
+  options: {
+    indexAxis: 'y',
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: { callbacks: { label: ctx => ctx.parsed.x.toLocaleString() + ' users' } }
+    },
+    scales: {
+      x: { grid: { color: gridColor }, ticks: { color: tickColor, callback: v => v >= 1000 ? (v/1000).toFixed(0)+'K' : v } },
+      y: { grid: { display: false }, ticks: { color: tickColor } }
+    }
+  }
+});
+
+/* ── Chart 5: Area Daily Orders ── */
+const days = Array.from({length:30}, (_,i) => {
+  const d = new Date(2024,10,1); d.setDate(d.getDate()+i);
+  return (d.getMonth()+1)+'/'+(d.getDate());
+});
+const orderData = [420,385,450,510,490,530,475,560,545,590,610,580,625,600,650,670,640,695,720,700,740,760,715,780,800,770,820,850,830,880];
+
+new Chart(document.getElementById('c5'), {
+  type: 'line',
+  data: {
+    labels: days,
+    datasets: [{
+      label: 'Orders',
+      data: orderData,
+      borderColor: '#8b5cf6',
+      backgroundColor: 'rgba(139,92,246,0.12)',
+      fill: true, tension: 0.4, pointRadius: 0, borderWidth: 2
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { display: false }, ticks: { color: tickColor, maxTicksLimit: 10, autoSkip: true } },
+      y: { grid: { color: gridColor }, ticks: { color: tickColor } }
+    }
+  }
+});
+</script>
+</body>
+</html>
